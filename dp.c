@@ -12,6 +12,7 @@
 #define BLUR 2
 #define PERTURB 25
 #define SIZE (REALSIZE+BLUR*2)
+static unsigned char base[SIZE][SIZE][4];
 static unsigned char img[SIZE][SIZE][3] = {0};
 static unsigned char vor[SIZE][SIZE][3];
 static unsigned char real[REALSIZE][REALSIZE][3];
@@ -22,29 +23,50 @@ static double points[3][POINTS][2];
 #define ri(a,b) (a+((double)rand()/RAND_MAX)*(b-a+1))
 int clip(int a) { return a < 0 ? 0 : a > 255 ? 255 : a; }
 
-void go(int y, int x) {
+void go(int y, int x, int use_base) {
     if (img[y][x][0] || img[y][x][1] || img[y][x][2]) return;
     if (rand() % RARITY) {
         int yy = y + ri(MIN, MAX), xx = x + ri(MIN, MAX);
         if (yy < 0 || yy >= SIZE || xx < 0 || xx >= SIZE) goto skip;
-        go(yy, xx);
+        go(yy, xx, use_base);
         img[y][x][0] = clip(img[yy][xx][0] + (int)ri(-PERTURB, PERTURB));
         img[y][x][1] = clip(img[yy][xx][1] + (int)ri(-PERTURB, PERTURB));
         img[y][x][2] = clip(img[yy][xx][2] + (int)ri(-PERTURB, PERTURB));
     } else {
-skip:
-        img[y][x][0] = vor[y][x][0];
-        img[y][x][1] = vor[y][x][1];
-        img[y][x][2] = vor[y][x][2];
+skip:{}
+        float prop = 0;
+        if (use_base) prop = base[y][x][3]/255.0;
+        img[y][x][0] = (1-prop)*vor[y][x][0] + prop*base[y][x][0];
+        img[y][x][1] = (1-prop)*vor[y][x][1] + prop*base[y][x][1];
+        img[y][x][2] = (1-prop)*vor[y][x][2] + prop*base[y][x][2];
     }
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s [seed]\n", argv[0]);
+    if (argc != 2 && argc != 3) {
+        fprintf(stderr, "usage: %s seed [base]\n", argv[0]);
         return 1;
     }
     srand(atoi(argv[1]));
+    if (argc == 3) {
+        png_image in = {0};
+        in.version = PNG_IMAGE_VERSION;
+        png_image_begin_read_from_file(&in, argv[2]);
+        in.format = PNG_FORMAT_RGBA;
+        unsigned char *buf = malloc(PNG_IMAGE_SIZE(in));
+        png_image_finish_read(&in, 0, buf, 0, 0);
+        for (int y = 0; y < SIZE; ++y) {
+            for (int x = 0; x < SIZE; ++x) {
+                int ry = (float)y / SIZE * in.height,
+                    rx = (float)x / SIZE * in.width;
+                base[y][x][0] = buf[(ry*in.width + rx)*4+0];
+                base[y][x][1] = buf[(ry*in.width + rx)*4+1];
+                base[y][x][2] = buf[(ry*in.width + rx)*4+2];
+                base[y][x][3] = buf[(ry*in.width + rx)*4+3];
+            }
+        }
+        free(buf);
+    }
 
     // generate voronoi points
     for (int i = 0; i < POINTS; ++i) {
@@ -75,7 +97,7 @@ int main(int argc, char **argv) {
     }
 
     // do the thing
-    for (int y = 0; y < SIZE; ++y) for (int x = 0; x < SIZE; ++x) go(y, x);
+    for (int y = 0; y < SIZE; ++y) for (int x = 0; x < SIZE; ++x) go(y, x, argc == 3);
 
     // blurring
     double ker[BLUR+1][BLUR+1];
