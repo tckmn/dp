@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <png.h>
+
 #define REALSIZE 512
 #define POINTS 25
 #define RARITY 10
@@ -12,6 +14,7 @@
 #define SIZE (REALSIZE+BLUR*2)
 static unsigned char img[SIZE][SIZE][3] = {0};
 static unsigned char vor[SIZE][SIZE][3];
+static unsigned char real[REALSIZE][REALSIZE][3];
 static double points[3][POINTS][2];
 
 #define max(a,b) ((a)>(b)?(a):(b))
@@ -86,29 +89,30 @@ int main(int argc, char **argv) {
             if (i && j) kersum += ker[i][j];
         }
     }
-    for (int y = 0; y < SIZE; ++y) {
-        for (int x = 0; x < SIZE; ++x) {
+    for (int y = BLUR; y < SIZE-BLUR; ++y) {
+        for (int x = BLUR; x < SIZE-BLUR; ++x) {
             double sum[3] = {0};
-            for (int by = max(y - BLUR, 0); by <= min(y + BLUR, SIZE-1); ++by) {
-                for (int bx = max(x - BLUR, 0); bx <= min(x + BLUR, SIZE-1); ++bx) {
+            for (int by = y - BLUR; by <= y + BLUR; ++by) {
+                for (int bx = x - BLUR; bx <= x + BLUR; ++bx) {
                     double mult = ker[abs(y-by)][abs(x-bx)]/kersum;
                     sum[0] += mult*img[by][bx][0];
                     sum[1] += mult*img[by][bx][1];
                     sum[2] += mult*img[by][bx][2];
                 }
             }
-            vor[y][x][0] = sum[0];
-            vor[y][x][1] = sum[1];
-            vor[y][x][2] = sum[2];
+            real[y-BLUR][x-BLUR][0] = sum[0];
+            real[y-BLUR][x-BLUR][1] = sum[1];
+            real[y-BLUR][x-BLUR][2] = sum[2];
         }
     }
 
-    printf("P6 %d %d 255\n", REALSIZE, REALSIZE);
-    for (int y = BLUR; y < SIZE-BLUR; ++y) {
-        for (int x = BLUR; x < SIZE-BLUR; ++x) {
-            fwrite(vor[y][x], 1, 3, stdout);
-        }
-    }
+    // write to out.png
+    png_image out = {0};
+    out.version = PNG_IMAGE_VERSION;
+    out.width = REALSIZE;
+    out.height = REALSIZE;
+    out.format = PNG_FORMAT_RGB;
+    png_image_write_to_file(&out, "out.png", 0, real, 0, 0);
 
     return 0;
 }
