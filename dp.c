@@ -52,7 +52,6 @@ int main(int argc, char **argv) {
         png_image in = {0};
         in.version = PNG_IMAGE_VERSION;
         png_image_begin_read_from_file(&in, argv[2]);
-        in.format = PNG_FORMAT_RGBA;
         unsigned char *buf = malloc(PNG_IMAGE_SIZE(in));
         png_image_finish_read(&in, 0, buf, 0, 0);
         for (int y = 0; y < SIZE; ++y) {
